@@ -1,0 +1,28 @@
+{
+  "network": "GenLayer Studio Network",
+  "chain_id": 61999,
+  "rpc": "https://studio.genlayer.com/api",
+  "source_commit": "977741b0da503a5969f61808b02a6e093d5536ae",
+  "contract_address": "0x8e830327E1A2F70B29fc6DbC110139FCFBBbbe6B",
+  "deployment_tx": "0xaf63cb76867da3292f00c23506ae97097bf0a0830c5f0fd903d24042bbe6b714",
+  "deployment_status": "FINALIZED",
+  "consensus_result": "MAJORITY_AGREE",
+  "deployed_source_matches_repository": true,
+  "transactions": [
+    { "method": "commit_forecast", "tx": "0xfa3c42c845249292b5a11865083a6d1ca84e32360b7c77cb8507eb6986cbf66e", "status": "FINALIZED" }
+  ],
+  "readback_before_reveal": { "committed": true, "revealed": false, "score": 0 },
+  "lifecycle_test": "IN_PROGRESS",
+  "historical_superseded_deployments": [
+    {
+      "address": "0x96A20ed8494487bcb9Ff9f9c4982C927622BC8fb",
+      "tx": "0xe62ddcce810921e153ec4c16ab5868350ef91a92ff1af70d2acfa737449f148c",
+      "note": "Superseded after StudioNet showed get_player received Address while the implementation assumed str; corrected source normalizes with str(player)."
+    },
+    {
+      "address": "0xa43E8c3346078aA2b14513F66F6667Eb36122847",
+      "tx": "0x3baed3349ce52a73c2bf94c4a3933a869cded2b36eb78883a1902d4a2ed16009",
+      "note": "Corrected source; commit finalized and view read succeeded, but the short reveal/resolution window elapsed before reveal. Superseded by the current longer-window test instance."
+    }
+  ]
+}
