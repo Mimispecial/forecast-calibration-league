@@ -133,7 +133,7 @@ try {
       if (tx.lifecycle === "SUBMISSION_UNCERTAIN") throw Error("Previous submission uncertain; reconcile before signing again.");
       await command(["account", "use", plan.wallets[step.wallet ?? "owner"].account]);
       const args = step.kind === "deploy" ? ["deploy", "--contract", plan.contract] : ["write", proof.contract_address, step.method];
-      if (tx.args.length) args.push("--args", ...tx.args.map(arg => typeof arg === "string" && /^0x[0-9a-fA-F]{40}$/.test(arg) ? arg : JSON.stringify(arg)));
+      if (tx.args.length) args.push("--args", ...tx.args.map(arg => typeof arg === "string" ? arg : JSON.stringify(arg)));
       tx.lifecycle = "SUBMISSION_UNCERTAIN"; save();
       await command(args, hash => { tx.hash = hash; tx.lifecycle = "SUBMITTED"; save(); console.log(step.id + ": submitted " + hash); });
       if (!tx.hash) throw Error("No transaction hash; inspect CLI/network before any retry.");
@@ -155,6 +155,14 @@ try {
   proof.state = "VERIFIED_STUDIONET"; delete proof.failure; save();
   console.log("Complete: " + proof.contract_address);
 } catch (error) {
+  const pending = proof.transactions.find(row => row.id === plan.steps[proof.next_step]?.id && !row.hash);
+  // A structured rate-limit rejection of eth_sendRawTransaction is not a
+  // submitted transaction. Preserve the failed attempt before a later retry.
+  if (pending && /eth_sendRawTransaction[\s\S]*Rate limit exceeded/.test(error.message)) {
+    proof.submission_attempts ??= [];
+    proof.submission_attempts.push({ ...pending, lifecycle: "RPC_REJECTED_RATE_LIMIT", diagnostics: error.message, observed_at: new Date().toISOString() });
+    proof.transactions = proof.transactions.filter(row => row !== pending);
+  }
   proof.failure = { at_step: proof.next_step, message: error.message, observed_at: new Date().toISOString() };
   save(); console.error(error.message); process.exitCode = 1;
 }
