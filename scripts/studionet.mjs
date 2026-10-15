@@ -143,9 +143,9 @@ try {
     if (step.kind === "read") {
       const preceding = proof.transactions.at(-1);
       if (preceding && preceding.lifecycle !== "FINALIZED") await receipt(preceding);
-      const value = await client.readContract({ address: proof.contract_address, functionName: step.method, args: step.args ?? [], stateStatus: "finalized" });
+      const value = await client.readContract({ address: proof.contract_address, functionName: step.method, args: step.args ?? [], transactionHashVariant: "latest-final" });
       for (const [key, expected] of Object.entries(step.expect ?? {})) assert.deepEqual(value[key], expected, step.id + "." + key);
-      proof.readbacks.push({ contract_address: proof.contract_address, id: step.id, method: step.method, args: step.args ?? [], value, observed_at: new Date().toISOString() });
+      proof.readbacks.push({ state_variant: "latest-final", contract_address: proof.contract_address, id: step.id, method: step.method, args: step.args ?? [], value, observed_at: new Date().toISOString() });
       console.log(step.id + ": readback verified"); save();
       if (process.argv.includes("--one-step")) { proof.next_step++; save(); process.exit(0); }
       continue;
