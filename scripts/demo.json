@@ -9,9 +9,9 @@
         "audit-forecast-v2",
         "The named public launch occurred before the frozen cutoff.",
         "Use the synthetic project announcement timestamp: launch by 2026-10-14T00:00:00Z is YES, later or explicitly not launched is NO; missing dates mean VOID.",
-        "$NOW+180",
         "$NOW+360",
-        "$NOW+1200"
+        "$NOW+900",
+        "$NOW+1800"
       ]
     },
     {

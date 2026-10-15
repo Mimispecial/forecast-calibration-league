@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
+import os from "node:os";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const plan = JSON.parse(fs.readFileSync(path.join(root, "scripts/demo.json"), "utf8"));
@@ -70,17 +71,17 @@ async function command(args, onHash) {
     });
   });
 }
-async function receipt(tx) {
+async function receipt(tx, requireFinal = true) {
   const until = Date.now() + 15 * 60000;
   while (Date.now() < until) {
     const result = await rpc("eth_getTransactionByHash", [tx.hash]);
     if (result) {
       tx.lifecycle = result.status; save();
-      if (result.status === "FINALIZED") {
+      if (result.status === "FINALIZED" || (!requireFinal && result.status === "ACCEPTED")) {
         const rows = result.consensus_data?.leader_receipt ?? [];
         const leaders = (Array.isArray(rows) ? rows : [rows]).filter(row => row.mode === "leader");
         const leader = leaders.at(-1);
-        assert.ok(leader, "No leader receipt in final transaction.");
+        if (!leader) { await new Promise(resolve => setTimeout(resolve, 15000)); continue; }
         tx.execution = leader.execution_result;
         tx.diagnostics = leader.genvm_result;
         tx.return_base64 = leader.result;
@@ -99,7 +100,7 @@ async function receipt(tx) {
         } else {
           assert.equal(tx.execution, "SUCCESS", "Unexpected execution failure: " + diagnostic);
         }
-        console.log(tx.id + ": FINALIZED / " + tx.execution);
+        console.log(tx.id + ": " + tx.lifecycle + " / " + tx.execution);
         return;
       }
       if (["UNDETERMINED", "CANCELED"].includes(result.status)) throw Error("Nonfinal terminal state " + result.status);
@@ -107,6 +108,27 @@ async function receipt(tx) {
     await new Promise(resolve => setTimeout(resolve, 15000));
   }
   throw Error("Receipt deadline exceeded; resume the existing hash, do not resubmit.");
+}
+async function signingLock(work) {
+  const lock = path.join(os.tmpdir(), "genlayer-six-ics-studionet-cli.lock");
+  const cooldown = lock + ".next";
+  const until = Date.now() + 180000;
+  let handle;
+  while (handle === undefined) {
+    try { handle = fs.openSync(lock, "wx"); }
+    catch (error) {
+      if (error.code !== "EEXIST" || Date.now() >= until) throw Error("CLI lock busy; reconcile a stopped runner before retrying.");
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  try {
+    const next = fs.existsSync(cooldown) ? Number(fs.readFileSync(cooldown, "utf8")) : 0;
+    while (Date.now() < next) await new Promise(resolve => setTimeout(resolve, Math.min(1000, next - Date.now())));
+    return await work();
+  } finally {
+    fs.writeFileSync(cooldown, String(Date.now() + 20000));
+    fs.closeSync(handle); fs.unlinkSync(lock);
+  }
 }
 try {
   for (; proof.next_step < plan.steps.length; proof.next_step++) {
@@ -119,6 +141,8 @@ try {
     }
     delete proof.resume_after;
     if (step.kind === "read") {
+      const preceding = proof.transactions.at(-1);
+      if (preceding && preceding.lifecycle !== "FINALIZED") await receipt(preceding);
       const value = await client.readContract({ address: proof.contract_address, functionName: step.method, args: step.args ?? [], stateStatus: "finalized" });
       for (const [key, expected] of Object.entries(step.expect ?? {})) assert.deepEqual(value[key], expected, step.id + "." + key);
       proof.readbacks.push({ contract_address: proof.contract_address, id: step.id, method: step.method, args: step.args ?? [], value, observed_at: new Date().toISOString() });
@@ -131,14 +155,19 @@ try {
     }
     if (!tx.hash) {
       if (tx.lifecycle === "SUBMISSION_UNCERTAIN") throw Error("Previous submission uncertain; reconcile before signing again.");
+      await signingLock(async () => {
       await command(["account", "use", plan.wallets[step.wallet ?? "owner"].account]);
       const args = step.kind === "deploy" ? ["deploy", "--contract", plan.contract] : ["write", proof.contract_address, step.method];
       if (tx.args.length) args.push("--args", ...tx.args.map(arg => typeof arg === "string" ? arg : JSON.stringify(arg)));
       tx.lifecycle = "SUBMISSION_UNCERTAIN"; save();
       await command(args, hash => { tx.hash = hash; tx.lifecycle = "SUBMITTED"; save(); console.log(step.id + ": submitted " + hash); });
       if (!tx.hash) throw Error("No transaction hash; inspect CLI/network before any retry.");
+      });
     }
-    await receipt(tx);
+    // Writes may pipeline after ACCEPTED + inspected execution. Nothing is
+    // declared proven until all receipts are FINALIZED at the end; readbacks
+    // wait for the preceding write's finality.
+    await receipt(tx, step.kind === "deploy");
     if (step.kind === "deploy") {
       assert.ok(proof.contract_address, "Deployment did not produce an address.");
       const deployed = Buffer.from(await rpc("gen_getContractCode", [proof.contract_address]), "base64");
@@ -152,6 +181,7 @@ try {
       save();
     }
   }
+  for (const tx of proof.transactions) if (tx.lifecycle !== "FINALIZED") await receipt(tx);
   proof.state = "VERIFIED_STUDIONET"; delete proof.failure; save();
   console.log("Complete: " + proof.contract_address);
 } catch (error) {
