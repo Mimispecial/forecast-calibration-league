@@ -126,7 +126,7 @@ async function signingLock(work) {
     while (Date.now() < next) await new Promise(resolve => setTimeout(resolve, Math.min(1000, next - Date.now())));
     return await work();
   } finally {
-    fs.writeFileSync(cooldown, String(Date.now() + 20000));
+    fs.writeFileSync(cooldown, String(Date.now() + 60000));
     fs.closeSync(handle); fs.unlinkSync(lock);
   }
 }
@@ -146,7 +146,9 @@ try {
       const value = await client.readContract({ address: proof.contract_address, functionName: step.method, args: step.args ?? [], stateStatus: "finalized" });
       for (const [key, expected] of Object.entries(step.expect ?? {})) assert.deepEqual(value[key], expected, step.id + "." + key);
       proof.readbacks.push({ contract_address: proof.contract_address, id: step.id, method: step.method, args: step.args ?? [], value, observed_at: new Date().toISOString() });
-      console.log(step.id + ": readback verified"); save(); continue;
+      console.log(step.id + ": readback verified"); save();
+      if (process.argv.includes("--one-step")) { proof.next_step++; save(); process.exit(0); }
+      continue;
     }
     let tx = proof.transactions.find(row => row.id === step.id);
     if (!tx) {
@@ -180,6 +182,7 @@ try {
       if (!proof.deployments.some(row => row.transaction_hash === tx.hash)) proof.deployments.push({ contract_address: proof.contract_address, transaction_hash: tx.hash, constructor_args: tx.args, source_byte_identical: true });
       save();
     }
+    if (process.argv.includes("--one-step")) { proof.next_step++; save(); process.exit(0); }
   }
   for (const tx of proof.transactions) if (tx.lifecycle !== "FINALIZED") await receipt(tx);
   proof.state = "VERIFIED_STUDIONET"; delete proof.failure; save();
