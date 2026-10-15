@@ -1,0 +1,82 @@
+{
+  "status": "HISTORICAL_SUPERSEDED_NOT_CURRENT_PROOF",
+  "notice": "Archived verbatim legacy evidence. Mixed top-level/embedded deployments are not a canonical current release. Earlier normalized source comparisons were not byte-exact proofs. Refer to deployment-specific embedded addresses; current fixed source requires a new deployment.",
+  "legacy_record": {
+    "network": "GenLayer Studio Network",
+    "chain_id": 61999,
+    "rpc": "https://studio.genlayer.com/api",
+    "source_commit": "977741b0da503a5969f61808b02a6e093d5536ae",
+    "contract_address": "0xE8Ab3EEdE6C1238283a7750C36A32BE01C3c4aeb",
+    "deployment_tx": "0x5fb5751b31753731a0daa733e3b3174ad973ce92048b957da94292a0082c8456",
+    "deployment_status": "FINALIZED",
+    "consensus_result": "MAJORITY_AGREE",
+    "deployed_source_matches_repository": true,
+    "transactions": [
+      {
+        "method": "commit_forecast",
+        "tx": "0xfa3c42c845249292b5a11865083a6d1ca84e32360b7c77cb8507eb6986cbf66e",
+        "status": "FINALIZED"
+      }
+    ],
+    "readback_before_reveal": {
+      "committed": true,
+      "revealed": false,
+      "score": 0
+    },
+    "lifecycle_test": "FINALIZED_SUCCESS_FRESH_WALLET",
+    "historical_previous_wallet_deployment": {
+      "contract_address": "0x8e830327E1A2F70B29fc6DbC110139FCFBBbbe6B",
+      "deployment_tx": "0xaf63cb76867da3292f00c23506ae97097bf0a0830c5f0fd903d24042bbe6b714",
+      "note": "Superseded by this fresh-wallet StudioNet deployment. Earlier experimental deployments are retained below for audit history."
+    },
+    "historical_superseded_deployments": [
+      {
+        "address": "0x96A20ed8494487bcb9Ff9f9c4982C927622BC8fb",
+        "tx": "0xe62ddcce810921e153ec4c16ab5868350ef91a92ff1af70d2acfa737449f148c",
+        "note": "Superseded after StudioNet showed get_player received Address while the implementation assumed str; corrected source normalizes with str(player)."
+      },
+      {
+        "address": "0xa43E8c3346078aA2b14513F66F6667Eb36122847",
+        "tx": "0x3baed3349ce52a73c2bf94c4a3933a869cded2b36eb78883a1902d4a2ed16009",
+        "note": "Corrected source; commit finalized and view read succeeded, but the short reveal/resolution window elapsed before reveal. Superseded by the current longer-window test instance."
+      }
+    ],
+    "fresh_wallet_test": {
+      "owner": "0x1ddf74a14205ab1cc76cac45b2ae0b29a9b78174",
+      "player": "0x2c33c95575530580eeb377fc6f841dea694fd4ae",
+      "contract_address": "0xE8Ab3EEdE6C1238283a7750C36A32BE01C3c4aeb",
+      "deployment_tx": "0x5fb5751b31753731a0daa733e3b3174ad973ce92048b957da94292a0082c8456",
+      "deployment_status": "FINALIZED",
+      "test_status": "FINALIZED_SUCCESS",
+      "question_id": "six-wallet-forecast-20261015",
+      "reveal_deadline": 1792078981,
+      "resolve_after": 1792079161,
+      "transactions": [
+        {
+          "method": "commit_forecast",
+          "tx": "0xb06f803b2fa43dc0939af4c69ddc1ddd1c5cae2151d3c36b0bb17170209f3475",
+          "status": "FINALIZED",
+          "sender": "0x2c33c95575530580eeb377fc6f841dea694fd4ae"
+        },
+        {
+          "method": "reveal_forecast",
+          "tx": "0x025634fca00a8fb24f1c2d23bdef85f3986e13c7fda6044a8e1112b721754282",
+          "status": "FINALIZED",
+          "sender": "0x2c33c95575530580eeb377fc6f841dea694fd4ae"
+        },
+        {
+          "method": "resolve_question",
+          "tx": "0x210de3802214d0b147ebb8bff8bde16c08fe0b9ee01d8c0f32e66515b1ba1221",
+          "status": "FINALIZED",
+          "sender": "0x1ddf74a14205ab1cc76cac45b2ae0b29a9b78174"
+        }
+      ],
+      "readback": {
+        "committed": true,
+        "revealed": true,
+        "score": 990000,
+        "leaderboard_rank": 1
+      }
+    }
+  }
+}

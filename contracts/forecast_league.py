@@ -43,12 +43,15 @@ class ForecastCalibrationLeague(gl.Contract):
     scores: TreeMap[str, u256]
     revealed: TreeMap[str, bool]
     outcome: str
+    resolution_deadline: u256
+    evidence: str
+    evidence_digest: str
 
-    def __init__(self, question_id: str, proposition: str, resolution_criteria: str, reveal_deadline: u256, resolve_after: u256):
+    def __init__(self, question_id: str, proposition: str, resolution_criteria: str, reveal_deadline: u256, resolve_after: u256, resolution_deadline: u256):
         now = int(datetime.now(timezone.utc).timestamp())
         if not question_id or len(question_id) > 64 or not 20 <= len(proposition) <= 1000 or not 20 <= len(resolution_criteria) <= 1500:
             _fail("invalid_question")
-        if int(reveal_deadline) <= now or int(resolve_after) <= int(reveal_deadline):
+        if int(reveal_deadline) <= now or int(resolve_after) <= int(reveal_deadline) or int(resolution_deadline) <= int(resolve_after):
             _fail("invalid_deadlines")
         self.organizer = gl.message.sender_address
         self.question_id = question_id
@@ -58,6 +61,9 @@ class ForecastCalibrationLeague(gl.Contract):
         self.resolve_after = resolve_after
         self.state = "OPEN"
         self.outcome = "UNRESOLVED"
+        self.resolution_deadline = resolution_deadline
+        self.evidence = ""
+        self.evidence_digest = ""
 
     @gl.public.write
     def commit_forecast(self, commitment: str) -> None:
@@ -65,7 +71,7 @@ class ForecastCalibrationLeague(gl.Contract):
         now = int(datetime.now(timezone.utc).timestamp())
         if self.state != "OPEN" or now >= int(self.reveal_deadline):
             _fail("forecast_window_closed")
-        if len(self.players) >= MAX_PLAYERS or len(commitment) != 64 or self.commitments.get(player, ""):
+        if len(self.players) >= MAX_PLAYERS or len(commitment) != 64 or any(c not in "0123456789abcdefABCDEF" for c in commitment) or self.commitments.get(player, ""):
             _fail("invalid_or_duplicate_forecast")
         self.players.append(player)
         self.commitments[player] = commitment.lower()
@@ -77,7 +83,7 @@ class ForecastCalibrationLeague(gl.Contract):
         if self.state not in ("OPEN", "REVEAL") or now < int(self.reveal_deadline) or now >= int(self.resolve_after):
             _fail("reveal_closed")
         p = int(probability_bps)
-        if not self.commitments.get(player, "") or self.revealed.get(player, False) or p > 10_000 or len(salt) < 8:
+        if not self.commitments.get(player, "") or self.revealed.get(player, False) or p > 10_000 or not 8 <= len(salt) <= 128:
             _fail("invalid_forecast")
         if forecast_commitment(self.question_id, player, p, salt) != self.commitments[player]:
             _fail("commitment_mismatch")
@@ -86,13 +92,24 @@ class ForecastCalibrationLeague(gl.Contract):
         self.state = "REVEAL"
 
     @gl.public.write
-    def resolve_question(self, evidence: str) -> None:
+    def freeze_resolution_evidence(self, evidence: str) -> None:
         now = int(datetime.now(timezone.utc).timestamp())
-        if self.state == "RESOLVED" or now < int(self.resolve_after) or not 20 <= len(evidence) <= MAX_EVIDENCE:
+        if gl.message.sender_address != self.organizer or self.state not in ("OPEN", "REVEAL") or not int(self.resolve_after) <= now < int(self.resolution_deadline):
+            _fail("organizer_and_evidence_window_required")
+        if not 20 <= len(evidence.encode("utf-8")) <= MAX_EVIDENCE:
+            _fail("invalid_evidence")
+        self.evidence = evidence
+        self.evidence_digest = hashlib.sha256(evidence.encode("utf-8")).hexdigest()
+        self.state = "EVIDENCE_FROZEN"
+
+    @gl.public.write
+    def resolve_question(self) -> None:
+        now = int(datetime.now(timezone.utc).timestamp())
+        if self.state != "EVIDENCE_FROZEN" or now >= int(self.resolution_deadline):
             _fail("resolution_not_ready_or_invalid_evidence")
         proposition = self.proposition
         criteria = self.resolution_criteria
-        packet = evidence
+        packet = self.evidence
 
         def classify() -> dict[str, str]:
             answer = gl.nondet.exec_prompt(
@@ -118,6 +135,17 @@ class ForecastCalibrationLeague(gl.Contract):
             for player in self.players:
                 if self.revealed.get(player, False):
                     self.scores[player] = u256(brier_points(int(self.probabilities[player]), binary))
+
+    @gl.public.write
+    def expire(self) -> None:
+        if self.state in ("RESOLVED", "EXPIRED") or int(datetime.now(timezone.utc).timestamp()) < int(self.resolution_deadline):
+            _fail("expiry_not_available")
+        self.state = "EXPIRED"
+        self.outcome = "VOID"
+
+    @gl.public.view
+    def get_question(self) -> dict[str, Any]:
+        return {"question_id": self.question_id, "state": self.state, "outcome": self.outcome, "evidence_digest": self.evidence_digest, "commit_deadline": int(self.reveal_deadline), "reveal_end": int(self.resolve_after), "resolution_deadline": int(self.resolution_deadline)}
 
     @gl.public.view
     def get_player(self, player: str) -> dict[str, Any]:
